@@ -1,16 +1,20 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const getterminalsize = @import("getterminalsize.zig");
 const page_allocator = std.heap.page_allocator;
 
-fn printCells(cells: []u8) !void {
+fn printCells(cells: []u8, printNewline: bool) !void {
     const stdout = std.io.getStdOut().writer();
     const display = " #";
 
     for (cells) |*cell|
-        try stdout.print("{c}", .{ display[cell.*] });
+        try stdout.print("{c}", .{display[cell.*]});
+
+    if (printNewline)
+        try stdout.print("\n", .{});
 }
 
-fn computeNextGen(cells: *const []u8, ruleset: []u8, size: u16) !void {
+fn computeNextGen(cells: *const []u8, ruleset: [8]u1, size: u16) !void {
     const next_gen = try page_allocator.alloc(u8, size);
     defer page_allocator.free(next_gen);
 
@@ -19,7 +23,7 @@ fn computeNextGen(cells: *const []u8, ruleset: []u8, size: u16) !void {
         const next_cell = cells.*[(index + 1) % size];
         const neighborhood: u8 = (prev_cell << 2) | (cell.* << 1) | next_cell;
 
-        next_gen_cell.* = ruleset[neighborhood] - '0';
+        next_gen_cell.* = ruleset[neighborhood];
     }
 
     for (next_gen, cells.*) |*next_gen_cell, *cell|
@@ -33,7 +37,11 @@ pub fn main() !void {
     const stderr = std.io.getStdErr().writer();
 
     if (args.len < 2) {
-        try stderr.print("usage: {s} <rule>\nrule should be a nubmer between 0 and 255.\n", .{args[0]});
+        try stderr.print(
+            \\usage: {s} <rule>
+            \\rule should be a nubmer between 0 and 255.
+            \\
+        , .{args[0]});
         return error.InvalidArg;
     }
 
@@ -42,29 +50,24 @@ pub fn main() !void {
     const cells = try page_allocator.alloc(u8, termsize.col);
     defer page_allocator.free(cells);
 
+    @memset(cells, 0);
+    cells[termsize.col / 2] = 1;
+
     const rule: u8 = std.fmt.parseInt(u8, args[1], 10) catch {
-        try stderr.print("Please specify a rule between 0 and 255", .{});
+        try stderr.print("Please specify a rule between 0 and 255\n", .{});
         return error.InvalidArg;
     };
 
-    var ruleset_buffer: [8]u8 = undefined;
-    var ruleset_fba = std.heap.FixedBufferAllocator.init(&ruleset_buffer);
-    const ruleset_allocator = ruleset_fba.allocator();
-    
-    const ruleset = try ruleset_allocator.alloc(u8, 8);
-    defer ruleset_allocator.free(ruleset);
+    var ruleset: [8]u1 = undefined;
 
-    for (ruleset, 0..) |*byte, index|
-        byte.* = if ((rule & (@as(u8,1) << @intCast(index))) != 0) '1' else '0';
+    for (0..8) |index|
+        ruleset[index] = if ((rule & (@as(u8, 1) << @intCast(index))) != 0) 1 else 0;
 
-    for (cells) |*cell|
-        cell.* = 0;
+    try printCells(cells, true);
 
-    cells[termsize.col / 2] = 1;
-    try printCells(cells);
-
-    for (0..termsize.row - 2) |_| {
+    for (0..termsize.row - 2) |iteration| {
         try computeNextGen(&cells, ruleset, termsize.col);
-        try printCells(cells);
+        // Windows’ prompt automatically prints a newline, so a final one is not needed.
+        try printCells(cells, (builtin.target.os.tag != .windows or iteration != termsize.row - 3));
     }
 }

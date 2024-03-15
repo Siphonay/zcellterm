@@ -8,8 +8,8 @@ const c = @cImport({
 });
 
 pub const TermSize = struct {
-    col: u16 = 0,
-    row: u16 = 0,
+    col: u16,
+    row: u16,
 };
 
 pub fn getTerminalSize() !TermSize {
@@ -38,7 +38,14 @@ pub fn getTerminalSize() !TermSize {
             .row = @intCast(info.dwSize.Y),
         };
     } else {
-        std.log.info("Getting terminal size is unavailable for your platform. Please specify size manually or create a pull request to implement support.", .{});
-        return error.Unsupported;
+        std.log.info(
+            \\Getting terminal size is not available for your platform yet. Defaulting to 80x25.
+            \\Feel free to contribute by sending a pull request to add it!
+            \\Setting terminal size manually will be implemented soon.
+        , .{});
+        return TermSize{
+            .col = 80,
+            .row = 25,
+        };
     }
 }
