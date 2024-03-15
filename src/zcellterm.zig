@@ -3,7 +3,7 @@ const builtin = @import("builtin");
 const getterminalsize = @import("getterminalsize.zig");
 const page_allocator = std.heap.page_allocator;
 
-fn printCells(cells: []u8, printNewline: bool) !void {
+fn printCells(cells: []u1, printNewline: bool) !void {
     const stdout = std.io.getStdOut().writer();
     const display = " #";
 
@@ -14,14 +14,14 @@ fn printCells(cells: []u8, printNewline: bool) !void {
         try stdout.print("\n", .{});
 }
 
-fn computeNextGen(cells: *const []u8, ruleset: [8]u1, size: u16) !void {
-    const next_gen = try page_allocator.alloc(u8, size);
+fn computeNextGen(cells: *const []u1, ruleset: [8]u1, size: u16) !void {
+    const next_gen = try page_allocator.alloc(u1, size);
     defer page_allocator.free(next_gen);
 
     for (cells.*, next_gen, 0..) |*cell, *next_gen_cell, index| {
         const prev_cell = cells.*[(index + size - 1) % size];
         const next_cell = cells.*[(index + 1) % size];
-        const neighborhood: u8 = (prev_cell << 2) | (cell.* << 1) | next_cell;
+        const neighborhood: u8 = (@as(u8, prev_cell) << 2) | (@as(u8, cell.*) << 1) | next_cell;
 
         next_gen_cell.* = ruleset[neighborhood];
     }
@@ -47,7 +47,7 @@ pub fn main() !void {
 
     const termsize = try getterminalsize.getTerminalSize();
 
-    const cells = try page_allocator.alloc(u8, termsize.col);
+    const cells = try page_allocator.alloc(u1, termsize.col);
     defer page_allocator.free(cells);
 
     @memset(cells, 0);
