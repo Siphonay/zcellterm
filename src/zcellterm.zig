@@ -41,7 +41,21 @@ pub fn main() !void {
         return error.InvalidArg;
     }
 
-    const termsize = try getterminalsize.getTerminalSize();
+    const termsize = getterminalsize.getTerminalSize() catch |err| blk: {
+        switch (err) {
+            getterminalsize.TermSizeError.Unsupported => {
+                std.log.warn("Getting terminal size automatically is not available for platform {s}. Defaulting to 80x25.", .{@tagName(builtin.target.os.tag)});
+                break :blk getterminalsize.TermSize{
+                    .col = 80,
+                    .row = 25,
+                };
+            },
+            else => {
+                std.log.err("Unexpected error getting terminal size.", .{});
+                return err;
+            },
+        }
+    };
 
     var current_gen = try gp_allocator.alloc(u1, termsize.col);
     defer gp_allocator.free(current_gen);
@@ -53,7 +67,7 @@ pub fn main() !void {
     current_gen[termsize.col / 2] = 1;
 
     const rule: u8 = std.fmt.parseInt(u8, args[1], 10) catch {
-        try stderr.print("Please specify a rule between 0 and 255\n", .{});
+        std.log.err("Please specify a rule between 0 and 255.", .{});
         return error.InvalidArg;
     };
 
