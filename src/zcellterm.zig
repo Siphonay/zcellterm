@@ -17,22 +17,25 @@ fn handleArgs(comptime Id: type, comptime params: []const clap.Param(Id)) !clap.
         return err;
     };
 
-    if (res.positionals.len == 0) {
-        std.log.err("Please specify a rule between 0 and 255.", .{});
-        return error.InvalidArgs;
-    }
+    if (res.args.help == 0) {
+        if (res.positionals.len == 0) {
+            std.log.err("Please specify a rule between 0 and 255.", .{});
+            return error.InvalidArgs;
+        }
 
-    if (res.args.condition != null and res.args.random != null) {
-        std.log.err("Cannot enable both specific and random conditions.", .{});
-        return error.InvalidArgs;
-    }
+        if (res.args.infinite != 0 and res.args.generations != null) {
+            std.log.err("Infinite mode enabled. Cannot compute a fixed amount of generations.", .{});
+            return error.InvalidArgs;
+        }
 
-    if (res.args.condition != null and res.args.width != null) {
-        std.log.warn("Starting condition specified. Width setting ignored.", .{});
-    }
+        if (res.args.condition != null and res.args.random != null) {
+            std.log.err("Cannot enable both specific and random conditions.", .{});
+            return error.InvalidArgs;
+        }
 
-    if (res.args.infinite != 0 and res.args.generations != null) {
-        std.log.warn("Infinite mode enabled. Specified number of generations ignored.", .{});
+        if (res.args.condition != null and res.args.width != null) {
+            std.log.warn("Starting condition specified. Width setting ignored.", .{});
+        }
     }
 
     return res;
@@ -73,7 +76,7 @@ pub fn main() !void {
         \\<u8>                          Rule between 0 and 255.
         \\-h, --help                    Display this help and exit.
         \\-w, --width <usize>           Width of each generation. Ignored if specific condition is set. Defaults to terminal width.
-        \\-g, --generations <usize>     Number of generations to display. Ignore if infinite mode is set. Defaults to terminal height.
+        \\-g, --generations <usize>     Number of generations to display. Incompatible with infinite mode. Defaults to terminal height.
         \\-s, --start <usize>           Pre-compute an amount of generations before displaying the automata.
         \\-i, --infinite                Infinite mode, keep computing generations until interrupted.
         \\-d, --delay <usize>           Delay display between lines, in milliseconds.
@@ -97,7 +100,7 @@ pub fn main() !void {
                     std.log.warn("Getting terminal size automatically is not available for platform {s}. Defaulting to 80x25.", .{@tagName(builtin.target.os.tag)});
                     break :blk getterminalsize.TermSize{
                         .col = 80,
-                        .row = 25,
+                        .row = 25 - 1, // assume prompt is 1 line high
                     };
                 },
                 getterminalsize.TermSizeError.NotATty => {
@@ -112,13 +115,8 @@ pub fn main() !void {
         };
     }
 
-    if (res.args.width != null) {
-        automaton_size.col = res.args.width orelse unreachable;
-    }
-
-    if (res.args.generations != null) {
-        automaton_size.row = res.args.generations orelse unreachable;
-    }
+    automaton_size.col = res.args.width orelse automaton_size.col;
+    automaton_size.row = res.args.generations orelse automaton_size.row;
 
     var current_gen = try gp_allocator.alloc(u1, automaton_size.col);
     defer gp_allocator.free(current_gen);
@@ -136,20 +134,18 @@ pub fn main() !void {
     for (0..8) |index|
         ruleset[index] = if ((rule & (@as(u8, 1) << @intCast(index))) != 0) 1 else 0;
 
-    if (res.args.start != null) {
-        for (0..res.args.start orelse unreachable) |_| {
-            try computeNextGen(&current_gen, &next_gen, ruleset, automaton_size.col);
-        }
+    for (0..(res.args.start orelse 0)) |_| {
+        try computeNextGen(&current_gen, &next_gen, ruleset, automaton_size.col);
     }
 
     try printCells(current_gen, true, res.args.delay);
 
     if (res.args.infinite == 0) {
-        for (0..automaton_size.row - 2) |iteration| {
+        for (1..automaton_size.row) |iteration| {
             try computeNextGen(&current_gen, &next_gen, ruleset, automaton_size.col);
 
             // Windows’ prompt automatically prints a newline, so a final one is not needed.
-            const windows_trailing_newline = (builtin.target.os.tag != .windows or iteration != automaton_size.row - 3);
+            const windows_trailing_newline = (builtin.target.os.tag != .windows or iteration != automaton_size.row - 1);
             try printCells(current_gen, windows_trailing_newline or !std.os.isatty(stdout.handle), res.args.delay);
         }
     } else {

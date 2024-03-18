@@ -30,7 +30,7 @@ pub fn getTerminalSize() TermSizeError!TermSize {
 
             return TermSize{ // These are stored in a signed type (windows.SHORT) but will never be negative
                 .col = @intCast(winsize.srWindow.Right - winsize.srWindow.Left + 1),
-                .row = @intCast(winsize.srWindow.Bottom - winsize.srWindow.Top + 1),
+                .row = @intCast(winsize.srWindow.Bottom - winsize.srWindow.Top), // no +1, assume prompt is 1 line high
             };
         },
         else => {
@@ -43,7 +43,7 @@ pub fn getTerminalSize() TermSizeError!TermSize {
             switch (os.errno(os.system.ioctl(stdout.handle, os.system.T.IOCGWINSZ, @intFromPtr(&winsize)))) {
                 .SUCCESS => return TermSize{
                     .col = winsize.ws_col,
-                    .row = winsize.ws_row,
+                    .row = winsize.ws_row - 1, // assume prompt is 1 line high
                 },
                 else => return TermSizeError.Unexpected,
             }
