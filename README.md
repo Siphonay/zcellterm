@@ -20,9 +20,9 @@ rule should be a nubmer between 0 and 255.
 * macOS
 * Windows
 * FreeBSD
-### Untested, probably works if you can build for those platforms
-* NetBSD
 * OpenBSD
+### Untested, [works in theory](https://ziglang.org/documentation/master/std/#A;std?.T.IOCGWINS) if you can build for those platforms (might be non-trivial)
+* NetBSD
 * Haiku
 * Solaris
 
