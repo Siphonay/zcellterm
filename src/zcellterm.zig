@@ -36,6 +36,16 @@ fn handleArgs(comptime Id: type, comptime params: []const clap.Param(Id)) !clap.
         if (res.args.condition != null and res.args.width != null) {
             std.log.warn("Starting condition specified. Width setting ignored.", .{});
         }
+
+        if (res.args.random) |rate| {
+            switch (rate) {
+                0...100 => {},
+                else => {
+                    std.log.err("Random activated cell rate needs to be between 0% and 100%", .{});
+                    return error.InvalidArgs;
+                },
+            }
+        }
     }
 
     return res;
@@ -45,14 +55,8 @@ fn printCells(cells: []u1, printNewline: bool, delay: ?usize) !void {
     const stdout = std.io.getStdOut().writer();
     const display = " #";
 
-    for (cells) |*cell| {
-        try stdout.print("{c}", .{display[cell.*]});
-    }
-
-    if (printNewline) {
-        try stdout.print("\n", .{});
-    }
-
+    for (cells) |cell| try stdout.print("{c}", .{display[cell]});
+    if (printNewline) try stdout.print("\n", .{});
     std.time.sleep((delay orelse 0) * 1_000_000);
 }
 
@@ -93,7 +97,10 @@ pub fn main() !void {
 
     var automaton_size: getterminalsize.TermSize = undefined;
 
-    if (res.args.width == null or res.args.generations == null) {
+    const width_is_set = res.args.width != null or res.args.condition != null;
+    const height_is_set = res.args.generations != null or res.args.infinite != 0;
+
+    if (!width_is_set or !height_is_set) {
         automaton_size = getterminalsize.getTerminalSize() catch |err| blk: {
             switch (err) {
                 getterminalsize.TermSizeError.Unsupported => {
@@ -115,8 +122,16 @@ pub fn main() !void {
         };
     }
 
-    automaton_size.col = res.args.width orelse automaton_size.col;
-    automaton_size.row = res.args.generations orelse automaton_size.row;
+    automaton_size.col = blk: {
+        if (res.args.condition) |condition| break :blk condition.len;
+        if (res.args.width) |width| break :blk width;
+        break :blk automaton_size.col;
+    };
+    automaton_size.row = blk: {
+        if (res.args.generations) |generations| break :blk generations;
+        if (res.args.infinite != 0) break :blk undefined;
+        break :blk automaton_size.row;
+    };
 
     var current_gen = try gp_allocator.alloc(u1, automaton_size.col);
     defer gp_allocator.free(current_gen);
@@ -124,8 +139,23 @@ pub fn main() !void {
     var next_gen: []u1 = try gp_allocator.alloc(u1, automaton_size.col);
     defer gp_allocator.free(next_gen);
 
-    @memset(current_gen, 0);
-    current_gen[automaton_size.col / 2] = 1;
+    if (res.args.condition) |condition| {
+        for (condition, 0..) |character, index| {
+            current_gen[index] = switch (character) {
+                '#', '1' => 1,
+                else => 0,
+            };
+        }
+    } else if (res.args.random) |rate| {
+        var rng = std.rand.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
+        
+        for (current_gen) |*cell| {
+            cell.* = if (rng.random().intRangeAtMost(u7, 1, 100) < rate) 1 else 0;
+        }
+    } else {
+        @memset(current_gen, 0);
+        current_gen[automaton_size.col / 2] = 1;
+    }
 
     const rule = res.positionals[0];
 

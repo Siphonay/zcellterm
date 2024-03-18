@@ -15,7 +15,7 @@ pub const TermSize = struct {
 
 pub fn getTerminalSize() TermSizeError!TermSize {
     const stdout = std.io.getStdOut();
-    
+
     if (!os.isatty(stdout.handle)) {
         return TermSizeError.NotATty;
     }
