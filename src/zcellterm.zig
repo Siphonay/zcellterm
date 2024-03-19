@@ -3,7 +3,9 @@ const builtin = @import("builtin");
 const clap = @import("clap");
 const getterminalsize = @import("getterminalsize.zig");
 
-pub const std_options = .{ .log_level = .warn };
+pub const std_options = struct { 
+    pub const log_level = .warn;
+};
 
 var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
 const gp_allocator = general_purpose_allocator.allocator();
