@@ -23,15 +23,9 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    // Add dependency to zig-clap, use submodule if Zig 0.11.0
-    if (builtin.zig_version.major == 0 and builtin.zig_version.minor == 11) {
-        exe.addAnonymousModule("clap", .{
-            .source_file = .{ .path = "libs/zig-clap/clap.zig" },
-        });
-    } else {
-        const clap = b.dependency("clap", .{});
-        exe.root_module.addImport("clap", clap.module("clap"));
-    }
+    // Add dependency to zig-clap
+    const clap = b.dependency("clap", .{});
+    exe.root_module.addImport("clap", clap.module("clap"));
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
