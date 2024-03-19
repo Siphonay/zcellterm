@@ -3,6 +3,8 @@ const builtin = @import("builtin");
 const clap = @import("clap");
 const getterminalsize = @import("getterminalsize.zig");
 
+pub const std_options = .{ .log_level = .warn };
+
 var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
 const gp_allocator = general_purpose_allocator.allocator();
 
@@ -148,7 +150,7 @@ pub fn main() !void {
         }
     } else if (res.args.random) |rate| {
         var rng = std.rand.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
-        
+
         for (current_gen) |*cell| {
             cell.* = if (rng.random().intRangeAtMost(u7, 1, 100) < rate) 1 else 0;
         }
