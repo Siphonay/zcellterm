@@ -56,7 +56,7 @@ fn printCells(cells: []u1, printNewline: bool, delay: ?usize) !void {
 
     for (cells) |cell| try stdout.print("{c}", .{display[cell]});
     if (printNewline) try stdout.print("\n", .{});
-    std.time.sleep((delay orelse 0) * 1_000_000);
+    if (delay) |delay_ms| std.time.sleep(delay_ms * 1_000_000);
 }
 
 fn computeNextGen(current_gen: *[]u1, next_gen: *[]u1, ruleset: [8]u1, size: usize) !void {
@@ -135,7 +135,7 @@ pub fn main() !void {
     var current_gen = try gp_allocator.alloc(u1, automaton_size.col);
     defer gp_allocator.free(current_gen);
 
-    var next_gen: []u1 = try gp_allocator.alloc(u1, automaton_size.col);
+    var next_gen = try gp_allocator.alloc(u1, automaton_size.col);
     defer gp_allocator.free(next_gen);
 
     if (res.args.condition) |condition| {
