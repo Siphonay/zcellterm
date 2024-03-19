@@ -40,12 +40,9 @@ fn handleArgs(comptime Id: type, comptime params: []const clap.Param(Id)) !clap.
         }
 
         if (res.args.random) |rate| {
-            switch (rate) {
-                0...100 => {},
-                else => {
-                    std.log.err("Random activated cell rate needs to be between 0% and 100%", .{});
-                    return error.InvalidArgs;
-                },
+            if (rate > 100) {
+                std.log.err("Random activated cell rate needs to be between 0% and 100%", .{});
+                return error.InvalidArgs;
             }
         }
     }
@@ -152,7 +149,7 @@ pub fn main() !void {
         var rng = std.rand.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
 
         for (current_gen) |*cell| {
-            cell.* = if (rng.random().intRangeAtMost(u7, 1, 100) < rate) 1 else 0;
+            cell.* = if (rng.random().intRangeAtMost(u7, 1, 100) <= rate) 1 else 0;
         }
     } else {
         @memset(current_gen, 0);
