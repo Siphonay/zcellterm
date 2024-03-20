@@ -1,6 +1,5 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const os = std.os;
 
 pub const TermSizeError = error{
     Unexpected,
@@ -16,37 +15,42 @@ pub const TermSize = struct {
 pub fn getTerminalSize() TermSizeError!TermSize {
     const stdout = std.io.getStdOut();
 
-    if (!os.isatty(stdout.handle)) {
-        return TermSizeError.NotATty;
-    }
+    return switch (builtin.target.os.tag) {
+        .windows => windows: {
+            var winsize: std.os.windows.CONSOLE_SCREEN_BUFFER_INFO = undefined;
 
-    switch (builtin.target.os.tag) {
-        .windows => {
-            var winsize: os.windows.CONSOLE_SCREEN_BUFFER_INFO = undefined;
-
-            if (os.windows.kernel32.GetConsoleScreenBufferInfo(stdout.handle, &winsize) != os.windows.TRUE) {
-                return TermSizeError.Unexpected;
+            if (std.os.windows.kernel32.GetConsoleScreenBufferInfo(stdout.handle, &winsize) != std.os.windows.TRUE) {
+                break :windows TermSizeError.Unexpected;
             }
 
-            return TermSize{ // These are stored in a signed type (windows.SHORT) but will never be negative
+            break :windows TermSize{ // These are stored in a signed type (windows.SHORT) but will never be negative
                 .col = @intCast(winsize.srWindow.Right - winsize.srWindow.Left + 1),
                 .row = @intCast(winsize.srWindow.Bottom - winsize.srWindow.Top), // no +1, assume prompt is 1 line high
             };
         },
-        else => {
-            if (!@hasDecl(os.system, "T")) {
-                return TermSizeError.Unsupported;
+        else => |os_tag| other_os: {
+            const ioctl_interface = switch (os_tag) {
+                .linux => std.os.linux,
+                else => std.c,
+            };
+
+            if (!@hasDecl(ioctl_interface, "T")) {
+                break :other_os TermSizeError.Unsupported;
             }
 
-            var winsize: os.system.winsize = undefined;
+            var winsize: ioctl_interface.winsize = undefined;
 
-            switch (os.errno(os.system.ioctl(stdout.handle, os.system.T.IOCGWINSZ, @intFromPtr(&winsize)))) {
-                .SUCCESS => return TermSize{
+            switch (std.posix.errno(ioctl_interface.ioctl(stdout.handle, std.c.T.IOCGWINSZ, @intFromPtr(&winsize)))) {
+                .SUCCESS => break :other_os TermSize{
                     .col = winsize.ws_col,
                     .row = winsize.ws_row - 1, // assume prompt is 1 line high
                 },
-                else => return TermSizeError.Unexpected,
+                else => break :other_os TermSizeError.Unexpected,
             }
         },
-    }
+    } catch |err| {
+        if (!std.posix.isatty(stdout.handle)) {
+            return TermSizeError.NotATty;
+        } else return err;
+    };
 }

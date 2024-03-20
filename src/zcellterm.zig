@@ -175,7 +175,7 @@ pub fn main() !void {
 
             // Windows’ prompt automatically prints a newline, so a final one is not needed.
             const windows_trailing_newline = (builtin.target.os.tag != .windows or iteration != automaton_size.row - 1);
-            try printCells(current_gen, windows_trailing_newline or !std.os.isatty(stdout.handle), res.args.delay);
+            try printCells(current_gen, windows_trailing_newline or !std.posix.isatty(stdout.handle), res.args.delay);
         }
     } else {
         while (true) {
