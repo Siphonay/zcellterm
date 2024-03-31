@@ -19,8 +19,8 @@ Inspired by the [Coding Train](https://www.youtube.com/watch?v=Ggxt06qSAe4) vide
 * Windows
 * FreeBSD
 * OpenBSD
-### Untested, [works in theory](https://ziglang.org/documentation/master/std/#A;std?.T.IOCGWINS) if you can build for those platforms (might be non-trivial)
 * NetBSD
+### Untested, [works in theory](https://ziglang.org/documentation/master/std/#A;std?.T.IOCGWINS) if you can build for those platforms (might be non-trivial)
 * Haiku
 * Solaris
 
