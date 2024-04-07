@@ -62,8 +62,9 @@ fn printCells(cells: std.bit_set.DynamicBitSet, printNewline: bool, delay: ?usiz
 fn computeNextGen(current_gen: *std.bit_set.DynamicBitSet, next_gen: *std.bit_set.DynamicBitSet, ruleset: std.bit_set.IntegerBitSet(8), size: usize) !void {
     for (0..size) |cell_index| {
         const prev_cell: u8 = @intFromBool(current_gen.isSet((cell_index + size - 1) % size));
+        const cur_cell: u8 = @intFromBool(current_gen.isSet(cell_index));
         const next_cell: u8 = @intFromBool(current_gen.isSet((cell_index + 1) % size));
-        const neighborhood = prev_cell << 2 | (@as(u8, @intFromBool(current_gen.isSet(cell_index))) << 1) | next_cell;
+        const neighborhood = prev_cell << 2 | cur_cell << 1 | next_cell;
 
         next_gen.setValue(cell_index, ruleset.isSet(neighborhood));
     }
@@ -171,8 +172,8 @@ pub fn main() !void {
             try computeNextGen(&current_gen, &next_gen, ruleset, automaton_size.col);
 
             // Windows’ prompt automatically prints a newline, so a final one is not needed.
-            const windows_trailing_newline = (builtin.target.os.tag != .windows or iteration != automaton_size.row - 1);
-            try printCells(current_gen, windows_trailing_newline or !std.posix.isatty(stdout.handle), res.args.delay, automaton_size.col);
+            const trailing_newline = (builtin.target.os.tag != .windows or iteration != automaton_size.row - 1) or !std.posix.isatty(stdout.handle);
+            try printCells(current_gen, trailing_newline, res.args.delay, automaton_size.col);
         }
     } else {
         while (true) {
