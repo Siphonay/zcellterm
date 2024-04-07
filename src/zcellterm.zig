@@ -59,13 +59,13 @@ fn printCells(cells: std.bit_set.DynamicBitSet, printNewline: bool, delay: ?usiz
     if (delay) |delay_ms| std.time.sleep(delay_ms * 1_000_000);
 }
 
-fn computeNextGen(current_gen: *std.bit_set.DynamicBitSet, next_gen: *std.bit_set.DynamicBitSet, ruleset: [8]u1, size: usize) !void {
+fn computeNextGen(current_gen: *std.bit_set.DynamicBitSet, next_gen: *std.bit_set.DynamicBitSet, ruleset: std.bit_set.IntegerBitSet(8), size: usize) !void {
     for (0..size) |cell_index| {
         const prev_cell: u8 = @intFromBool(current_gen.isSet((cell_index + size - 1) % size));
         const next_cell: u8 = @intFromBool(current_gen.isSet((cell_index + 1) % size));
-        const neighborhood: u8 = prev_cell << 2 | (@as(u8, @intFromBool(current_gen.isSet(cell_index))) << 1) | next_cell;
+        const neighborhood = prev_cell << 2 | (@as(u8, @intFromBool(current_gen.isSet(cell_index))) << 1) | next_cell;
 
-        next_gen.setValue(cell_index, ruleset[neighborhood] != 0);
+        next_gen.setValue(cell_index, ruleset.isSet(neighborhood));
     }
 
     std.mem.swap(std.bit_set.DynamicBitSet, current_gen, next_gen);
@@ -154,10 +154,11 @@ pub fn main() !void {
 
     const rule = res.positionals[0];
 
-    var ruleset: [8]u1 = undefined;
+    var ruleset = std.bit_set.IntegerBitSet(8).initEmpty();
 
-    for (0..8) |index|
-        ruleset[index] = if ((rule & (@as(u8, 1) << @intCast(index))) != 0) 1 else 0;
+    for (0..8) |index| {
+        ruleset.setValue(index, rule & (@as(u8, 1) << @intCast(index)) != 0);
+    }
 
     for (0..(res.args.start orelse 0)) |_| {
         try computeNextGen(&current_gen, &next_gen, ruleset, automaton_size.col);
