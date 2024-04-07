@@ -146,7 +146,7 @@ pub fn main() !void {
         var rng = std.rand.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
 
         for (0..automaton_size.col) |index| {
-            current_gen.setValue(index, rng.random().intRangeAtMost(u7, 1, 100) <= rate);
+            current_gen.setValue(index, rng.random().intRangeAtMost(usize, 1, 100) <= rate);
         }
     } else {
         current_gen.set(automaton_size.col / 2);
