@@ -33,17 +33,17 @@ pub fn getTerminalSize() TermSizeError!TermSize {
                 .linux => std.os.linux,
                 else => std.c,
             };
-
+            
             if (!@hasDecl(ioctl_interface, "T")) {
                 break :other_os TermSizeError.Unsupported;
             }
 
-            var winsize: ioctl_interface.winsize = undefined;
+            var winsize: std.posix.winsize = undefined;
 
             switch (std.posix.errno(ioctl_interface.ioctl(stdout.handle, ioctl_interface.T.IOCGWINSZ, @intFromPtr(&winsize)))) {
                 .SUCCESS => break :other_os TermSize{
-                    .col = winsize.ws_col,
-                    .row = winsize.ws_row - 1, // assume prompt is 1 line high
+                    .col = winsize.col,
+                    .row = winsize.row - 1, // assume prompt is 1 line high
                 },
                 else => break :other_os TermSizeError.Unexpected,
             }

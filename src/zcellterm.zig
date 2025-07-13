@@ -3,7 +3,7 @@ const builtin = @import("builtin");
 const clap = @import("clap");
 const getterminalsize = @import("getterminalsize.zig");
 
-pub const std_options = .{ .log_level = .warn };
+pub const std_options: std.Options = .{ .log_level = .warn };
 
 var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
 const gp_allocator = general_purpose_allocator.allocator();
@@ -20,11 +20,6 @@ fn handleArgs(comptime Id: type, comptime params: []const clap.Param(Id)) !clap.
     };
 
     if (res.args.help == 0) {
-        if (res.positionals.len == 0) {
-            std.log.err("Please specify a rule between 0 and 255.", .{});
-            return error.InvalidArgs;
-        }
-
         if (res.args.infinite != 0 and res.args.generations != null) {
             std.log.err("Infinite mode enabled. Cannot compute a fixed amount of generations.", .{});
             return error.InvalidArgs;
@@ -144,7 +139,7 @@ pub fn main() !void {
             current_gen.setValue(index, condition[index] == '#' or condition[index] == '1');
         }
     } else if (res.args.random) |rate| {
-        var rng = std.rand.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
+        var rng = std.Random.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
 
         for (0..automaton_size.col) |index| {
             current_gen.setValue(index, rng.random().intRangeAtMost(usize, 1, 100) <= rate);
@@ -153,7 +148,10 @@ pub fn main() !void {
         current_gen.set(automaton_size.col / 2);
     }
 
-    const rule = res.positionals[0];
+    const rule = res.positionals[0] orelse {
+        std.log.err("Please specify a rule between 0 and 255.", .{});
+        return error.InvalidArgs;
+    };
 
     var ruleset = std.bit_set.IntegerBitSet(8).initEmpty();
 
