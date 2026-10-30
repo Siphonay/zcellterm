@@ -5,17 +5,15 @@ const getterminalsize = @import("getterminalsize.zig");
 
 pub const std_options: std.Options = .{ .log_level = .warn };
 
-var general_purpose_allocator = std.heap.GeneralPurposeAllocator(.{}){};
-const gp_allocator = general_purpose_allocator.allocator();
+const p_allocator = std.heap.page_allocator;
 
-fn handleArgs(comptime Id: type, comptime params: []const clap.Param(Id)) !clap.Result(clap.Help, params, clap.parsers.default) {
-    const stderr = std.io.getStdErr().writer();
+fn handleArgs(comptime Id: type, comptime params: []const clap.Param(Id), init: std.process.Init) !clap.Result(clap.Help, params, clap.parsers.default) {
     var diag = clap.Diagnostic{};
-    const res = clap.parse(clap.Help, params, clap.parsers.default, .{
+    const res = clap.parse(clap.Help, params, clap.parsers.default, init.minimal.args, .{
         .diagnostic = &diag,
-        .allocator = gp_allocator,
+        .allocator = p_allocator,
     }) catch |err| {
-        diag.report(stderr, err) catch {};
+        try diag.reportToFile(init.io, .stderr(), err);
         return err;
     };
 
@@ -45,13 +43,13 @@ fn handleArgs(comptime Id: type, comptime params: []const clap.Param(Id)) !clap.
     return res;
 }
 
-fn printCells(cells: std.bit_set.DynamicBitSet, printNewline: bool, delay: ?usize, size: usize) !void {
-    const stdout = std.io.getStdOut().writer();
-    const display = " #";
+fn printCells(cells: std.bit_set.DynamicBitSet, printNewline: bool, delay: ?usize, size: usize, init: std.process.Init) !void {
+    const stdout = std.Io.File.stdout();
+    const display: [2][]const u8 = .{ " ", "#" };
 
-    for (0..size) |cell_index| try stdout.print("{c}", .{display[@intFromBool(cells.isSet(cell_index))]});
-    if (printNewline) try stdout.print("\n", .{});
-    if (delay) |delay_ms| std.time.sleep(delay_ms * 1_000_000);
+    for (0..size) |cell_index| try stdout.writeStreamingAll(init.io, display[@intFromBool(cells.isSet(cell_index))]);
+    if (printNewline) try stdout.writeStreamingAll(init.io, "\n");
+    if (delay) |delay_ms| try std.Io.sleep(init.io, std.Io.Duration.fromMilliseconds(@intCast(delay_ms)), std.Io.Clock.real);
 }
 
 fn computeNextGen(current_gen: *std.bit_set.DynamicBitSet, next_gen: *std.bit_set.DynamicBitSet, ruleset: std.bit_set.IntegerBitSet(8), size: usize) !void {
@@ -67,10 +65,7 @@ fn computeNextGen(current_gen: *std.bit_set.DynamicBitSet, next_gen: *std.bit_se
     std.mem.swap(std.bit_set.DynamicBitSet, current_gen, next_gen);
 }
 
-pub fn main() !void {
-    const stdout = std.io.getStdOut();
-    const stderr = std.io.getStdErr().writer();
-
+pub fn main(init: std.process.Init) !void {
     const params = comptime clap.parseParamsComptime(
         \\<u8>                          Rule between 0 and 255.
         \\-h, --help                    Display this help and exit.
@@ -83,11 +78,11 @@ pub fn main() !void {
         \\-r, --random <usize>          Start with a random condition, with percentage frequency of active cells.
     );
 
-    const res = try handleArgs(clap.Help, &params);
+    const res = try handleArgs(clap.Help, &params, init);
     defer res.deinit();
 
     if (res.args.help != 0) {
-        return clap.help(stderr, clap.Help, &params, .{});
+        return clap.helpToFile(init.io, .stderr(), clap.Help, &params, .{});
     }
 
     var automaton_size: getterminalsize.TermSize = undefined;
@@ -96,7 +91,7 @@ pub fn main() !void {
     const height_is_set = res.args.generations != null or res.args.infinite != 0;
 
     if (!width_is_set or !height_is_set) {
-        automaton_size = getterminalsize.getTerminalSize() catch |err| blk: {
+        automaton_size = getterminalsize.getTerminalSize(init) catch |err| blk: {
             switch (err) {
                 getterminalsize.TermSizeError.Unsupported => {
                     std.log.warn("Getting terminal size automatically is not available for platform {s}. Defaulting to 80x25.", .{@tagName(builtin.target.os.tag)});
@@ -128,10 +123,10 @@ pub fn main() !void {
         break :blk automaton_size.row;
     };
 
-    var current_gen = try std.bit_set.DynamicBitSet.initEmpty(gp_allocator, automaton_size.col);
+    var current_gen = try std.bit_set.DynamicBitSet.initEmpty(p_allocator, automaton_size.col);
     defer current_gen.deinit();
 
-    var next_gen = try std.bit_set.DynamicBitSet.initEmpty(gp_allocator, automaton_size.col);
+    var next_gen = try std.bit_set.DynamicBitSet.initEmpty(p_allocator, automaton_size.col);
     defer next_gen.deinit();
 
     if (res.args.condition) |condition| {
@@ -139,7 +134,7 @@ pub fn main() !void {
             current_gen.setValue(index, condition[index] == '#' or condition[index] == '1');
         }
     } else if (res.args.random) |rate| {
-        var rng = std.Random.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
+        var rng = std.Random.DefaultPrng.init(@intCast(std.Io.Clock.real.now(init.io).toMilliseconds()));
 
         for (0..automaton_size.col) |index| {
             current_gen.setValue(index, rng.random().intRangeAtMost(usize, 1, 100) <= rate);
@@ -153,7 +148,7 @@ pub fn main() !void {
         return error.InvalidArgs;
     };
 
-    var ruleset = std.bit_set.IntegerBitSet(8).initEmpty();
+    var ruleset: std.bit_set.Integer(8) = .empty;
 
     for (0..8) |index| {
         ruleset.setValue(index, rule & (@as(u8, 1) << @intCast(index)) != 0);
@@ -163,20 +158,20 @@ pub fn main() !void {
         try computeNextGen(&current_gen, &next_gen, ruleset, automaton_size.col);
     }
 
-    try printCells(current_gen, true, res.args.delay, automaton_size.col);
+    try printCells(current_gen, true, res.args.delay, automaton_size.col, init);
 
     if (res.args.infinite == 0) {
         for (1..automaton_size.row) |iteration| {
             try computeNextGen(&current_gen, &next_gen, ruleset, automaton_size.col);
 
             // Windows’ prompt automatically prints a newline, so a final one is not needed.
-            const trailing_newline = (builtin.target.os.tag != .windows or iteration != automaton_size.row - 1) or !std.posix.isatty(stdout.handle);
-            try printCells(current_gen, trailing_newline, res.args.delay, automaton_size.col);
+            const trailing_newline = (builtin.target.os.tag != .windows or iteration != automaton_size.row - 1) or !try std.Io.File.stdout().isTty(init.io);
+            try printCells(current_gen, trailing_newline, res.args.delay, automaton_size.col, init);
         }
     } else {
         while (true) {
             try computeNextGen(&current_gen, &next_gen, ruleset, automaton_size.col);
-            try printCells(current_gen, true, res.args.delay, automaton_size.col);
+            try printCells(current_gen, true, res.args.delay, automaton_size.col, init);
         }
     }
 }

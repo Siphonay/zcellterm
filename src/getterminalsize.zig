@@ -2,6 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 pub const TermSizeError = error{
+    Canceled,
     Unexpected,
     Unsupported,
     NotATty,
@@ -12,20 +13,22 @@ pub const TermSize = struct {
     row: usize,
 };
 
-pub fn getTerminalSize() TermSizeError!TermSize {
-    const stdout = std.io.getStdOut();
+pub fn getTerminalSize(init: std.process.Init) TermSizeError!TermSize {
+    const stdout = std.Io.File.stdout();
 
     return switch (builtin.target.os.tag) {
         .windows => windows: {
-            var winsize: std.os.windows.CONSOLE_SCREEN_BUFFER_INFO = undefined;
+            var buffer_info_req = std.os.windows.CONSOLE.USER_IO.GET_SCREEN_BUFFER_INFO;
 
-            if (std.os.windows.kernel32.GetConsoleScreenBufferInfo(stdout.handle, &winsize) != std.os.windows.TRUE) {
-                break :windows TermSizeError.Unexpected;
+            switch (try buffer_info_req.operate(init.io, stdout)) {
+                .SUCCESS => {},
+                else => break :windows TermSizeError.Canceled,
             }
 
-            break :windows TermSize{ // These are stored in a signed type (windows.SHORT) but will never be negative
-                .col = @intCast(winsize.srWindow.Right - winsize.srWindow.Left + 1),
-                .row = @intCast(winsize.srWindow.Bottom - winsize.srWindow.Top), // no +1, assume prompt is 1 line high
+            const winsize = buffer_info_req.Data;
+            break :windows TermSize{
+                .col = @intCast(winsize.dwWindowSize.X),
+                .row = @intCast(winsize.dwWindowSize.Y - 1), // prompt is 1 line high
             };
         },
         else => |os_tag| other_os: {
@@ -33,7 +36,7 @@ pub fn getTerminalSize() TermSizeError!TermSize {
                 .linux => std.os.linux,
                 else => std.c,
             };
-            
+
             if (!@hasDecl(ioctl_interface, "T")) {
                 break :other_os TermSizeError.Unsupported;
             }
@@ -49,7 +52,7 @@ pub fn getTerminalSize() TermSizeError!TermSize {
             }
         },
     } catch |err| {
-        if (!std.posix.isatty(stdout.handle)) {
+        if (!try std.Io.File.stdout().isTty(init.io)) {
             return TermSizeError.NotATty;
         } else return err;
     };
