@@ -57,7 +57,7 @@ fn computeNextGen(current_gen: *std.bit_set.DynamicBitSet, next_gen: *std.bit_se
         const prev_cell: u8 = @intFromBool(current_gen.isSet((cell_index + size - 1) % size));
         const cur_cell: u8 = @intFromBool(current_gen.isSet(cell_index));
         const next_cell: u8 = @intFromBool(current_gen.isSet((cell_index + 1) % size));
-        const neighborhood = prev_cell << 2 | cur_cell << 1 | next_cell;
+        const neighborhood = (prev_cell << 2) | (cur_cell << 1) | next_cell;
 
         next_gen.setValue(cell_index, ruleset.isSet(neighborhood));
     }
