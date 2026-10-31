@@ -20,9 +20,8 @@ pub fn getTerminalSize(init: std.process.Init) TermSizeError!TermSize {
         .windows => windows: {
             var buffer_info_req = std.os.windows.CONSOLE.USER_IO.GET_SCREEN_BUFFER_INFO;
 
-            switch (try buffer_info_req.operate(init.io, stdout)) {
-                .SUCCESS => {},
-                else => break :windows TermSizeError.Canceled,
+            if (try buffer_info_req.operate(init.io, stdout) != .SUCCESS) {
+                break :windows TermSizeError.Canceled;
             }
 
             const winsize = buffer_info_req.Data;
