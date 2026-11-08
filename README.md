@@ -30,7 +30,7 @@ Know how to implement size detection for a platform not listed here? Feel free t
 ```
 zig build
 ```
-Release 1.0.2 tested with zig 0.13.0 and zig-clap 0.9.0 releases. Feel free to use optimization flags.
+Release 1.0.5 builds with zig 0.17.0 and tested up to 0.18.0-dev.935+ead8f5a7. Feel free to use optimization flags.
 
 ## Thanks
 I’m using the [zig-clap](https://github.com/Hejsil/zig-clap) library to parse arguments.
