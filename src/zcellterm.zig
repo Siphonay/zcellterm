@@ -32,6 +32,16 @@ fn handleArgs(comptime Id: type, comptime params: []const clap.Param(Id), init: 
             std.log.warn("Starting condition specified. Width setting ignored.", .{});
         }
 
+        if (res.args.width != null and res.args.width == 0) {
+            std.log.err("Width must be at least 1.", .{});
+            return error.InvalidArgs;
+        }
+
+        if (res.args.generations != null and res.args.generations == 0) {
+            std.log.err("Number of generations must be at least 1.", .{});
+            return error.InvalidArgs;
+        }
+
         if (res.args.random) |rate| {
             if (rate > 100) {
                 std.log.err("Random activated cell rate needs to be between 0% and 100%", .{});
@@ -69,8 +79,8 @@ pub fn main(init: std.process.Init) !void {
     const params = comptime clap.parseParamsComptime(
         \\<u8>                          Rule between 0 and 255.
         \\-h, --help                    Display this help and exit.
-        \\-w, --width <usize>           Width of each generation. Ignored if specific condition is set. Defaults to terminal width.
-        \\-g, --generations <usize>     Number of generations to display. Incompatible with infinite mode. Defaults to terminal height.
+        \\-w, --width <usize>           Width of each generation. Ignored if specific condition is set. Minimum 1. Defaults to terminal width.
+        \\-g, --generations <usize>     Number of generations to display. Incompatible with infinite mode. Minimum 1. Defaults to terminal height.
         \\-s, --start <usize>           Pre-compute an amount of generations before displaying the automata.
         \\-i, --infinite                Infinite mode, keep computing generations until interrupted.
         \\-d, --delay <usize>           Delay display between lines, in milliseconds.
